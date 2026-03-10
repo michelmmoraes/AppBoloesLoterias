@@ -1,0 +1,57 @@
+﻿@page "/"
+@using AppBoloesLoterias
+@inject Supabase.Client Supabase
+
+<PageTitle>Início</PageTitle>
+
+<h1>Teste de Conexão com Supabase</h1>
+
+@if (mensagemErro != null)
+{
+    <div style="background-color: #ffdddd; padding: 15px; border: 2px solid red; border-radius: 5px;">
+        <h3 style="color: red; margin-top: 0;">🚨 O Aplicativo tropeçou! O erro real é:</h3>
+        <p><strong>@mensagemErro</strong></p>
+    </div>
+}
+else if (listaParticipantes == null)
+{
+    <p>Conectando e buscando dados...</p>
+}
+else if (listaParticipantes.Count == 0)
+{
+    <p>✅ Conectou perfeitamente! Mas a tabela está vazia no banco.</p>
+}
+else
+{
+    <div style="background-color: #e6f7ff; padding: 15px; border: 2px solid #1890ff; border-radius: 5px;">
+        <h3 style="color: #1890ff; margin-top: 0;">🎉 Sucesso! Encontramos @listaParticipantes.Count registro(s) no banco:</h3>
+        <ul>
+            @foreach (var p in listaParticipantes)
+            {
+                <li>
+                    <strong>ID no Banco:</strong> @p.Id <br />
+                    <strong>Nome:</strong> @(string.IsNullOrWhiteSpace(p.Nome) ? "[NOME EM BRANCO LÁ NO BANCO]" : p.Nome)
+                </li>
+            }
+        </ul>
+    </div>
+}
+@code {
+    private List<Participante> listaParticipantes;
+    private string mensagemErro;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Tentamos buscar os dados lá no banco
+            var resposta = await Supabase.From<Participante>().Get();
+            listaParticipantes = resposta.Models;
+        }
+        catch (Exception ex)
+        {
+            // Se der qualquer erro (tipo o erro do Telefone de novo), ele captura aqui e joga na tela!
+            mensagemErro = ex.Message;
+        }
+    }
+}

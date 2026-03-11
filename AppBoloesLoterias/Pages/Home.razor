@@ -4,6 +4,13 @@
 
 <PageTitle>Início</PageTitle>
 
+<button @onclick='() => Nav.NavigateTo("/cadastro-participante")'
+        style="padding: 15px; background-color: #28a745; color: white; border-radius: 8px; width: 100%; border: none; font-size: 18px; margin-bottom: 20px;">
+    ➕ CADASTRAR PARTICIPANTE
+</button>
+
+@inject NavigationManager Nav
+
 <h1>Teste de Conexão com Supabase</h1>
 
 @if (mensagemErro != null)

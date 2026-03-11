@@ -21,10 +21,10 @@ public class Participante : BaseModel
     public List<string> Telefones { get; set; }
 
     [Column("saldo")]
-    public decimal Saldo { get; set; }
+    public decimal Saldo { get; set; } 
 
     [Column("historico_saldo")]
-    public string HistoricoSaldo { get; set; } // Armazenado como JSONB no banco
+    public object HistoricoSaldo { get; set; } // Armazenado como JSONB no banco
 
     [Column("criado_em")]
     public DateTime? CriadoEm { get; set; }

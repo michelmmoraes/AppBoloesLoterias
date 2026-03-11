@@ -1,0 +1,104 @@
+﻿@page "/cadastro-participante"
+@using AppBoloesLoterias
+@inject Supabase.Client Supabase
+@inject NavigationManager Nav
+
+<PageTitle>Novo Participante</PageTitle>
+
+<div style="padding: 20px; max-width: 500px; margin: auto; font-family: sans-serif;">
+    <h2 style="color: #333;">👤 Novo Participante</h2>
+
+    <hr style="border: 0; border-top: 1px solid #eee; margin-bottom: 20px;" />
+
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Apelido (Nome único):</label>
+        <input @bind="novoParticipante.Nome"
+               class="form-control"
+               style="width: 100%; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px;" />
+    </div>
+
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nome Completo:</label>
+        <input @bind="novoParticipante.NomeCompleto"
+               class="form-control"
+               style="width: 100%; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px;" />
+    </div>
+
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Saldo Inicial (R$):</label>
+        <input @bind="novoParticipante.Saldo"
+               type="number"
+               step="0.01"
+               class="form-control"
+               style="width: 100%; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px;" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(mensagem))
+    {
+        <div style="padding: 15px; margin-bottom: 20px; border-radius: 8px; background-color: @(mensagem.Contains("✅") ? "#d4edda" : "#f8d7da"); color: @(mensagem.Contains("✅") ? "#155724" : "#721c24"); border: 1px solid @(mensagem.Contains("✅") ? "#c3e6cb" : "#f5c6cb");">
+            @mensagem
+        </div>
+    }
+
+    <button @onclick="Salvar"
+            disabled="@processando"
+            style="width: 100%; padding: 15px; font-size: 18px; font-weight: bold; background-color: @(processando ? "#ccc" : "#007bff"); color: white; border: none; border-radius: 8px; cursor: pointer;">
+        @(processando ? "⏳ SALVANDO..." : "💾 SALVAR NO BANCO")
+    </button>
+    
+    <button @onclick='() => Nav.NavigateTo("/")'
+            style="width: 100%; margin-top: 15px; background: none; border: 1px solid #ccc; padding: 12px; border-radius: 8px; cursor: pointer; color: #666;">
+        ⬅ Voltar para Home
+    </button>
+</div>
+
+@code {
+    private Participante novoParticipante = new Participante { Saldo = 0 };
+    private string mensagem;
+    private bool processando = false;
+
+    private async Task Salvar()
+    {
+        if (processando) return;
+
+        try
+        {
+            processando = true;
+            mensagem = "⏳ Comunicando com o Supabase...";
+
+            // Saneamento de dados (Trim)
+            novoParticipante.Nome = novoParticipante.Nome?.Trim();
+            novoParticipante.NomeCompleto = novoParticipante.NomeCompleto?.Trim();
+
+            if (string.IsNullOrWhiteSpace(novoParticipante.Nome))
+            {
+                mensagem = "⚠️ O apelido é obrigatório!";
+                return;
+            }
+
+            // O ID será gerado automaticamente (PrimaryKey id, false)
+            await Supabase.From<Participante>().Insert(novoParticipante);
+            
+            mensagem = $"✅ {novoParticipante.Nome} cadastrado com sucesso!";
+            novoParticipante = new Participante { Saldo = 0 }; // Limpa o formulário
+        }
+        catch (Exception ex)
+        {
+            // Analisamos o erro para ver se é duplicidade (Unique Constraint)
+            if (ex.GetType().Name.Contains("PostgrestException") ||
+                ex.Message.Contains("23505") ||
+                ex.Message.Contains("duplicate key"))
+            {
+                mensagem = "⚠️ Erro: Já existe um participante com este apelido!";
+            }
+            else
+            {
+                mensagem = "❌ Erro: " + ex.Message;
+            }
+        }
+        finally
+        {
+            processando = false;
+        }
+    }
+}

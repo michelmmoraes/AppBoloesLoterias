@@ -18,7 +18,7 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Compilar o Projeto
-        run: dotnet publish -c Release -o release
+        run: dotnet publish AppBoloesLoterias/AppBoloesLoterias.csproj -c Release -o release
 
       - name: Evitar bloqueio do GitHub (Jekyll)
         run: touch release/wwwroot/.nojekyll

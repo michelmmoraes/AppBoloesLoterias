@@ -20,6 +20,9 @@ jobs:
       - name: Compilar o Projeto
         run: dotnet publish -c Release -o release
 
+      - name: Ajustar Base Href para GitHub Pages
+        run: sed -i 's|<base href="/" />|<base href="/AppBoloesLoterias/" />|g' release/wwwroot/index.html
+
       - name: Evitar bloqueio do GitHub (Jekyll)
         run: touch release/wwwroot/.nojekyll
 

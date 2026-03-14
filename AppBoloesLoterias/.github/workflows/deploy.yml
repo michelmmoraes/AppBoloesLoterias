@@ -1,4 +1,4 @@
-﻿name: Publicar App Bolões Loterias no GitHub Pages
+name: Publicar App Bolões Loterias no GitHub Pages
 on:
   push:
     branches: [ master, main ]
@@ -21,7 +21,12 @@ jobs:
         run: dotnet publish -c Release -o release
 
       - name: Ajustar Base Href para GitHub Pages
+        # Troque para letras minúsculas aqui se o link do seu repositório for minúsculo
         run: sed -i 's|<base href="/" />|<base href="/AppBoloesLoterias/" />|g' release/wwwroot/index.html
+
+      - name: Criar página 404 para roteamento SPA do Blazor
+        # Esta é a linha mágica que resolve os problemas de navegação no GitHub Pages
+        run: cp release/wwwroot/index.html release/wwwroot/404.html
 
       - name: Evitar bloqueio do GitHub (Jekyll)
         run: touch release/wwwroot/.nojekyll

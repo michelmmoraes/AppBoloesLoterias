@@ -9,16 +9,37 @@
 
 <div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
     <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="cadastro-participante">
-                <span class="bi bi-person-plus-nav-menu" aria-hidden="true"></span> Cadastrar Membro
-            </NavLink>
-        </div>
+        
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
                 <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
             </NavLink>
         </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="lista-boloes">
+                <span class="bi bi-ticket-detailed-fill-nav-menu" aria-hidden="true"></span> Meus Bolões
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="lista-participantes">
+                <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span> Participantes
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="lista-concursos">
+                <span class="bi bi-dice-5-fill-nav-menu" aria-hidden="true"></span> Concursos
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="cadastro-participante">
+                <span class="bi bi-person-plus-nav-menu" aria-hidden="true"></span> Cadastrar Membro
+            </NavLink>
+        </div>
+        
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="counter">
                 <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
@@ -29,6 +50,7 @@
                 <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
             </NavLink>
         </div>
+
     </nav>
 </div>
 

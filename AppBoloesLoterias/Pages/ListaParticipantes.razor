@@ -1,0 +1,99 @@
+﻿@page "/lista-participantes"
+@using AppBoloesLoterias
+@inject Supabase.Client Supabase
+@inject NavigationManager Nav
+
+<PageTitle>Participantes</PageTitle>
+
+<div style="padding: 20px; max-width: 600px; margin: auto; font-family: sans-serif;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0; color: #333;">👥 Participantes</h2>
+        <button @onclick='() => Nav.NavigateTo("cadastro-participante")'
+                style="padding: 10px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            ➕ Novo
+        </button>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+        <input @bind="termoBusca" @bind:event="oninput"
+               type="text"
+               placeholder="🔍 Buscar por apelido ou nome..."
+               style="width: 100%; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);" />
+    </div>
+
+    @if (participantes == null)
+    {
+        <p><em>⏳ Carregando membros do bolão...</em></p>
+    }
+    else if (!ParticipantesFiltrados.Any())
+    {
+        <div class="alert alert-info">Nenhum participante encontrado com este termo.</div>
+    }
+    else
+    {
+        // Agora o laço percorre a lista filtrada, e não a lista original inteira
+        @foreach (var p in ParticipantesFiltrados)
+        {
+            <div style="background: white; border: 1px solid #ddd; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <strong style="font-size: 18px; color: #007bff;">@p.Nome</strong>
+                        <div style="font-size: 14px; color: #666;">@p.NomeCompleto</div>
+                        <div style="margin-top: 8px; font-weight: bold; color: @(p.Saldo >= 0 ? "#28a745" : "#dc3545");">
+                            Saldo: R$ @p.Saldo.ToString("N2")
+                        </div>
+                    </div>
+                    
+                    <button @onclick='() => Nav.NavigateTo($"editar-participante/{p.Id}")'
+                            style="background: none; border: none; color: #ffc107; cursor: pointer; font-size: 20px;" title="Editar">
+                        ✏️
+                    </button>
+                </div>
+            </div>
+        }
+    }
+
+    <button @onclick='() => Nav.NavigateTo("")'
+            style="width: 100%; margin-top: 20px; background: #eee; border: 1px solid #ccc; padding: 12px; border-radius: 8px; cursor: pointer;">
+        ⬅ Voltar para Home
+    </button>
+</div>
+
+@code {
+    private List<Participante> participantes;
+    private string termoBusca = "";
+
+    // Propriedade Dinâmica que filtra a lista original em tempo real
+    private IEnumerable<Participante> ParticipantesFiltrados
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(termoBusca))
+                return participantes;
+
+            // Filtra ignorando maiúsculas/minúsculas, buscando tanto no Nome (Apelido) quanto no Nome Completo
+            return participantes.Where(p =>
+                (p.Nome != null && p.Nome.Contains(termoBusca, StringComparison.OrdinalIgnoreCase)) ||
+                (p.NomeCompleto != null && p.NomeCompleto.Contains(termoBusca, StringComparison.OrdinalIgnoreCase))
+            );
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarParticipantes();
+    }
+
+    private async Task CarregarParticipantes()
+    {
+        try
+        {
+            var resultado = await Supabase.From<Participante>().Get();
+            participantes = resultado.Models.OrderBy(p => p.Nome).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Erro ao carregar: " + ex.Message);
+        }
+    }
+}

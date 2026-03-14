@@ -1,0 +1,244 @@
+﻿@page "/editar-participante/{IdParam}"
+@using AppBoloesLoterias
+@inject Supabase.Client Supabase
+@inject NavigationManager Nav
+
+<PageTitle>Editar Participante</PageTitle>
+
+<div style="padding: 20px; max-width: 500px; margin: auto; font-family: sans-serif;">
+    <h2 style="color: #333;">✏️ Editar Participante</h2>
+
+    <hr style="border: 0; border-top: 1px solid #eee; margin-bottom: 20px;" />
+
+    @if (carregando)
+    {
+        <p><em>⏳ Carregando dados...</em></p>
+    }
+    else if (participante == null)
+    {
+        <div class="alert alert-danger">❌ Participante não encontrado.</div>
+        <button @onclick='() => Nav.NavigateTo("lista-participantes")' class="btn btn-secondary">Voltar</button>
+    }
+    else
+    {
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Apelido (Nome único):</label>
+            <input @bind="participante.Nome"
+                   class="form-control"
+                   style="width: 100%; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px;" />
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nome Completo:</label>
+            <input @bind="participante.NomeCompleto"
+                   class="form-control"
+                   style="width: 100%; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px;" />
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <label style="font-weight: bold; color: #333;">Telefones</label>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <input @bind="novoTelefone" placeholder="Ex: (91) 99999-9999"
+                       style="flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px;" />
+                
+                <button type="button" @onclick="AdicionarTelefone"
+                        style="padding: 10px 15px; background-color: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    ➕ Add
+                </button>
+            </div>
+
+            @if (participante.Telefones != null && participante.Telefones.Any())
+            {
+                <ul style="list-style-type: none; padding: 0; margin: 0;">
+                    @foreach (var tel in participante.Telefones)
+                    {
+                        <li style="display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; padding: 8px; border: 1px solid #eee; border-radius: 5px; margin-bottom: 5px;">
+                            <span>📞 @tel</span>
+                            <button type="button" @onclick="() => RemoverTelefone(tel)"
+                                    style="background: none; border: none; color: #dc3545; cursor: pointer; font-weight: bold;">
+                                X
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; margin-bottom: 15px;">
+            <h4 style="margin-top: 0; color: #007bff;">💰 Financeiro</h4>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Saldo Atual (R$):</label>
+                <input @bind="participante.Saldo"
+                       type="number"
+                       step="0.01"
+                       class="form-control"
+                       style="width: 100%; padding: 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; font-weight: bold; color: @(participante.Saldo >= 0 ? "#28a745" : "#dc3545");" />
+            </div>
+
+            @if (participante.Saldo != saldoOriginal)
+            {
+                <div style="margin-bottom: 10px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #d39e00;">Motivo da Alteração:</label>
+                    <input @bind="motivoSaldo" placeholder="Ex: PIX recebido, Pagamento de cota..."
+                           class="form-control"
+                           style="width: 100%; padding: 10px; border: 1px solid #ffc107; border-radius: 8px;" />
+                    <small style="color: #666;">Uma variação de R$ @((participante.Saldo - saldoOriginal).ToString("N2")) será registrada no histórico.</small>
+                </div>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(mensagem))
+        {
+            <div style="padding: 15px; margin-bottom: 20px; border-radius: 8px; background-color: @(mensagem.Contains("✅") ? "#d4edda" : "#f8d7da"); color: @(mensagem.Contains("✅") ? "#155724" : "#721c24"); border: 1px solid @(mensagem.Contains("✅") ? "#c3e6cb" : "#f5c6cb");">
+                @mensagem
+            </div>
+        }
+
+        <button @onclick="SalvarAlteracoes"
+                disabled="@processando"
+                style="width: 100%; padding: 15px; font-size: 18px; font-weight: bold; background-color: @(processando ? "#ccc" : "#ffc107"); color: #333; border: none; border-radius: 8px; cursor: pointer;">
+            @(processando ? "⏳ SALVANDO..." : "💾 ATUALIZAR DADOS")
+        </button>
+        
+        <button @onclick='() => Nav.NavigateTo("lista-participantes")'
+                style="width: 100%; margin-top: 15px; background: none; border: 1px solid #ccc; padding: 12px; border-radius: 8px; cursor: pointer; color: #666;">
+            ⬅ Voltar para Lista
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string IdParam { get; set; }
+
+    private Participante participante;
+    private bool carregando = true;
+    private bool processando = false;
+    private string mensagem;
+    private string novoTelefone = "";
+    
+    // Variáveis para rastrear o financeiro
+    private decimal saldoOriginal;
+    private string motivoSaldo = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarParticipante();
+    }
+
+    private async Task CarregarParticipante()
+    {
+        try
+        {
+            var response = await Supabase.From<Participante>().Get();
+            participante = response.Models.FirstOrDefault(p => p.Id.ToString() == IdParam);
+            
+            // Guarda o saldo atual para comparar depois
+            if (participante != null)
+            {
+                saldoOriginal = participante.Saldo;
+            }
+        }
+        catch (Exception ex)
+        {
+            mensagem = "Erro ao carregar dados: " + ex.Message;
+        }
+        finally
+        {
+            carregando = false;
+        }
+    }
+
+    private async Task SalvarAlteracoes()
+    {
+        if (processando || participante == null) return;
+
+        try
+        {
+            processando = true;
+            mensagem = "⏳ Atualizando no Supabase...";
+            
+            participante.Nome = participante.Nome?.Trim();
+            participante.NomeCompleto = participante.NomeCompleto?.Trim();
+
+            if (string.IsNullOrWhiteSpace(participante.Nome))
+            {
+                mensagem = "⚠️ O apelido é obrigatório!";
+                processando = false;
+                return;
+            }
+
+            var todosResponse = await Supabase.From<Participante>().Get();
+            var todosParticipantes = todosResponse.Models;
+
+            var apelidoJaExiste = todosParticipantes.Any(p =>
+                p.Id.ToString() != IdParam &&
+                string.Equals(p.Nome, participante.Nome, StringComparison.OrdinalIgnoreCase));
+
+            if (apelidoJaExiste)
+            {
+                mensagem = $"⚠️ O apelido '{participante.Nome}' já está em uso por outra pessoa!";
+                processando = false;
+                return;
+            }
+
+            // --- LÓGICA DO HISTÓRICO DE SALDO ---
+            if (participante.Saldo != saldoOriginal)
+            {
+                participante.HistoricoSaldo ??= new List<RegistroSaldo>();
+                
+                participante.HistoricoSaldo.Add(new RegistroSaldo
+                {
+                    Data = DateTime.Now,
+                    ValorAnterior = saldoOriginal,
+                    ValorNovo = participante.Saldo,
+                    Diferenca = participante.Saldo - saldoOriginal,
+                    Motivo = string.IsNullOrWhiteSpace(motivoSaldo) ? "Ajuste manual de saldo" : motivoSaldo.Trim()
+                });
+            }
+
+            await Supabase.From<Participante>().Update(participante);
+            
+            mensagem = $"✅ Dados atualizados com sucesso!";
+            
+            // Atualiza o saldo original para evitar duplicação no histórico se a pessoa clicar em salvar de novo
+            saldoOriginal = participante.Saldo;
+            motivoSaldo = "";
+        }
+        catch (Exception ex)
+        {
+            if (ex.Message.Contains("23505") || ex.Message.Contains("duplicate key"))
+            {
+                mensagem = "⚠️ Erro: Já existe um participante com este apelido no banco!";
+            }
+            else
+            {
+                mensagem = "❌ Erro ao atualizar: " + ex.Message;
+            }
+        }
+        finally
+        {
+            processando = false;
+        }
+    }
+
+    private void AdicionarTelefone()
+    {
+        if (string.IsNullOrWhiteSpace(novoTelefone)) return;
+
+        participante.Telefones ??= new List<string>();
+        
+        if (!participante.Telefones.Contains(novoTelefone.Trim()))
+        {
+            participante.Telefones.Add(novoTelefone.Trim());
+            novoTelefone = "";
+        }
+    }
+
+    private void RemoverTelefone(string telefoneParaRemover)
+    {
+        participante.Telefones?.Remove(telefoneParaRemover);
+    }
+}

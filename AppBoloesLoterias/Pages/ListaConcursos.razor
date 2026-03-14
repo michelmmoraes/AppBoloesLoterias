@@ -1,0 +1,95 @@
+﻿@page "/lista-concursos"
+@using AppBoloesLoterias
+@inject Supabase.Client Supabase
+@inject NavigationManager Nav
+
+<PageTitle>Concursos</PageTitle>
+
+<div style="padding: 20px; max-width: 600px; margin: auto; font-family: sans-serif;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0; color: #333;">🎰 Concursos</h2>
+        <button @onclick='() => Nav.NavigateTo("gerenciar-concurso")'
+                style="padding: 10px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+            ➕ Novo
+        </button>
+    </div>
+
+    @if (concursos == null)
+    {
+        <p><em>⏳ Carregando concursos do banco...</em></p>
+    }
+    else if (!concursos.Any())
+    {
+        <div class="alert alert-info">Nenhum concurso cadastrado ainda.</div>
+    }
+    else
+    {
+        @foreach (var c in concursos)
+        {
+            // Lógica para saber se o concurso já tem resultado ou está pendente
+            bool temResultado = c.ResultadoDezenas != null && c.ResultadoDezenas.Any();
+
+            <div style="background: white; border: 1px solid #ddd; border-left: 5px solid @(temResultado ? "#28a745" : "#ffc107"); border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    
+                    <div style="flex: 1;">
+                        <strong style="font-size: 18px; color: #007bff;">@c.Tipo - Concurso @c.Numero</strong>
+                        
+                        <div style="font-size: 14px; color: #666; margin-top: 5px;">
+                            📅 Sorteio: @(c.DataSorteio?.ToString("dd/MM/yyyy") ?? "Data não definida")
+                        </div>
+                        
+                        <div style="margin-top: 8px;">
+                            @if (temResultado)
+                            {
+                                <span style="background-color: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">
+                                    ✅ Resultado Lançado
+                                </span>
+                            }
+                            else
+                            {
+                                <span style="background-color: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">
+                                    ⏳ Aguardando Sorteio
+                                </span>
+                            }
+                        </div>
+                    </div>
+                    
+                    <button @onclick='() => Nav.NavigateTo($"gerenciar-concurso/{c.Id}")'
+                            style="background: #f8f9fa; border: 1px solid #ccc; border-radius: 50%; width: 45px; height: 45px; display: flex; justify-content: center; align-items: center; cursor: pointer; font-size: 18px; transition: 0.2s;"
+                            title="Editar / Lançar Resultado">
+                        ✏️
+                    </button>
+                </div>
+            </div>
+        }
+    }
+
+    <button @onclick='() => Nav.NavigateTo("")'
+            style="width: 100%; margin-top: 20px; background: #eee; border: 1px solid #ccc; padding: 12px; border-radius: 8px; cursor: pointer;">
+        ⬅ Voltar para Home
+    </button>
+</div>
+
+@code {
+    private List<Concurso> concursos;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarConcursos();
+    }
+
+    private async Task CarregarConcursos()
+    {
+        try
+        {
+            var resultado = await Supabase.From<Concurso>().Get();
+            // Ordena para mostrar os mais recentes ou futuros no topo (usando a data do sorteio)
+            concursos = resultado.Models.OrderByDescending(c => c.DataSorteio).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Erro ao carregar concursos: " + ex.Message);
+        }
+    }
+}

@@ -25,6 +25,36 @@
     </div>
 
     <div style="margin-bottom: 15px;">
+        <label style="font-weight: bold; color: #333;">Telefones</label>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <input @bind="novoTelefone" placeholder="Ex: (91) 99999-9999"
+                   style="flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px;" />
+            
+            <button type="button" @onclick="AdicionarTelefone"
+                    style="padding: 10px 15px; background-color: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                ➕ Add
+            </button>
+        </div>
+
+        @if (novoParticipante.Telefones != null && novoParticipante.Telefones.Any())
+        {
+            <ul style="list-style-type: none; padding: 0; margin: 0;">
+                @foreach (var tel in novoParticipante.Telefones)
+                {
+                    <li style="display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; padding: 8px; border: 1px solid #eee; border-radius: 5px; margin-bottom: 5px;">
+                        <span>📞 @tel</span>
+                        <button type="button" @onclick="() => RemoverTelefone(tel)"
+                                style="background: none; border: none; color: #dc3545; cursor: pointer; font-weight: bold;">
+                            X
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
+    <div style="margin-bottom: 15px;">
         <label style="display: block; margin-bottom: 5px; font-weight: bold;">Saldo Inicial (R$):</label>
         <input @bind="novoParticipante.Saldo"
                type="number"
@@ -46,16 +76,17 @@
         @(processando ? "⏳ SALVANDO..." : "💾 SALVAR NO BANCO")
     </button>
     
-    <button @onclick='() => Nav.NavigateTo("/")'
+    <button @onclick='() => Nav.NavigateTo("")'
             style="width: 100%; margin-top: 15px; background: none; border: 1px solid #ccc; padding: 12px; border-radius: 8px; cursor: pointer; color: #666;">
         ⬅ Voltar para Home
     </button>
 </div>
 
 @code {
-    private Participante novoParticipante = new Participante { Saldo = 0 };
+    private Participante novoParticipante = new Participante { Saldo = 0, Telefones = new List<string>() };
     private string mensagem;
     private bool processando = false;
+    private string novoTelefone = "";
 
     private async Task Salvar()
     {
@@ -65,29 +96,58 @@
         {
             processando = true;
             mensagem = "⏳ Comunicando com o Supabase...";
-
-            // Saneamento de dados (Trim)
+            
+            // 1. Saneamento básico de textos
             novoParticipante.Nome = novoParticipante.Nome?.Trim();
             novoParticipante.NomeCompleto = novoParticipante.NomeCompleto?.Trim();
 
             if (string.IsNullOrWhiteSpace(novoParticipante.Nome))
             {
                 mensagem = "⚠️ O apelido é obrigatório!";
+                processando = false;
                 return;
             }
 
-            // O ID será gerado automaticamente (PrimaryKey id, false)
+            // 2. Validação 100% C# (Sem depender de bibliotecas externas)
+            if (novoParticipante.Telefones != null && novoParticipante.Telefones.Any())
+            {
+                // Traz todos os participantes (rápido e indolor para nossa escala de dados)
+                var todosResponse = await Supabase.From<Participante>().Get();
+                var todosParticipantes = todosResponse.Models;
+
+                foreach (var tel in novoParticipante.Telefones)
+                {
+                    // Limpa o telefone que o usuário digitou na tela agora
+                    var telLimpo = new string(tel.Where(char.IsDigit).ToArray());
+                    
+                    // Procura em memória se alguém já tem esse número salvo no banco
+                    var dono = todosParticipantes.FirstOrDefault(p =>
+                        p.Telefones != null &&
+                        p.Telefones.Any(t => new string(t.Where(char.IsDigit).ToArray()) == telLimpo));
+
+                    if (dono != null)
+                    {
+                        mensagem = $"⚠️ O telefone {tel} já pertence a {dono.Nome}!";
+                        processando = false;
+                        return;
+                    }
+                }
+            }
+
+            novoParticipante.CriadoEm = DateTime.Now;
+
+            // 3. Inserção no Banco
             await Supabase.From<Participante>().Insert(novoParticipante);
             
             mensagem = $"✅ {novoParticipante.Nome} cadastrado com sucesso!";
-            novoParticipante = new Participante { Saldo = 0 }; // Limpa o formulário
+            
+            // 4. Limpa o formulário
+            novoParticipante = new Participante { Saldo = 0, Telefones = new List<string>() };
+            novoTelefone = "";
         }
         catch (Exception ex)
         {
-            // Analisamos o erro para ver se é duplicidade (Unique Constraint)
-            if (ex.GetType().Name.Contains("PostgrestException") ||
-                ex.Message.Contains("23505") ||
-                ex.Message.Contains("duplicate key"))
+            if (ex.Message.Contains("23505") || ex.Message.Contains("duplicate key"))
             {
                 mensagem = "⚠️ Erro: Já existe um participante com este apelido!";
             }
@@ -100,5 +160,24 @@
         {
             processando = false;
         }
+    }
+
+    private void AdicionarTelefone()
+    {
+        if (string.IsNullOrWhiteSpace(novoTelefone)) return;
+
+        novoParticipante.Telefones ??= new List<string>();
+        
+        // Evita duplicados na própria lista que está sendo montada na tela
+        if (!novoParticipante.Telefones.Contains(novoTelefone.Trim()))
+        {
+            novoParticipante.Telefones.Add(novoTelefone.Trim());
+            novoTelefone = ""; // Limpa a caixa de texto
+        }
+    }
+
+    private void RemoverTelefone(string telefoneParaRemover)
+    {
+        novoParticipante.Telefones?.Remove(telefoneParaRemover);
     }
 }

@@ -1,0 +1,250 @@
+﻿@page "/gerenciar-bolao"
+@page "/gerenciar-bolao/{IdParam}"
+@using AppBoloesLoterias
+@inject Supabase.Client Supabase
+@inject NavigationManager Nav
+
+<PageTitle>@(EhEdicao ? "Editar Bolão" : "Novo Bolão")</PageTitle>
+
+<div style="padding: 20px; max-width: 600px; margin: auto; font-family: sans-serif;">
+    <h2 style="color: #333;">🎟️ @(EhEdicao ? "Editar" : "Novo") Bolão</h2>
+    <hr style="border: 0; border-top: 1px solid #eee; margin-bottom: 20px;" />
+
+    @if (carregando)
+    {
+        <p><em>⏳ Carregando dados e relacionamentos...</em></p>
+    }
+    else
+    {
+        <div style="background-color: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ced4da;">
+            <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #495057;">🎯 Concurso Vinculado (Obrigatório):</label>
+            
+            <div style="display: flex; gap: 10px;">
+                <select @bind="bolao.ConcursoId" class="form-control" style="flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; font-weight: bold;">
+                    <option value="0">-- Selecione o Concurso --</option>
+                    @foreach (var c in listaConcursos)
+                    {
+                        <option value="@c.Id">@c.Tipo - Num: @c.Numero (Sorteio: @(c.DataSorteio?.ToString("dd/MM/yyyy")))</option>
+                    }
+                </select>
+
+                <a href="gerenciar-concurso" target="_blank"
+                       style="display: flex; align-items: center; justify-content: center; padding: 0 15px; border-radius: 5px; text-decoration: none; border: 1px solid #28a745; background-color: white; color: #28a745; font-weight: bold; transition: 0.2s;"
+                       title="Criar Concurso em nova aba">
+                    ➕ Novo
+                </a>
+
+                <button type="button" @onclick="AtualizarApenasConcursos"
+                        style="padding: 0 15px; border-radius: 5px; border: 1px solid #17a2b8; background-color: white; color: #17a2b8; font-weight: bold; cursor: pointer; transition: 0.2s;"
+                        title="Atualizar lista de concursos">
+                    🔄
+                </button>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <div style="flex: 1;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Valor da Cota (R$):</label>
+                <input @bind="bolao.ValorCota" type="number" step="0.01" class="form-control" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; color: #28a745; font-weight: bold;" />
+            </div>
+            
+            <div style="flex: 1;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Fundo de Reserva (%):</label>
+                <input @bind="bolao.PercentualFundo" type="number" step="0.1" class="form-control" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc;" />
+                <small style="color: #666;">Ex: 10 para 10%</small>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+            <div style="flex: 1;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Status do Bolão:</label>
+                <select @bind="bolao.Status" class="form-control" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc;">
+                    <option value="ABERTO">🟢 ABERTO (Arrecadando cotas)</option>
+                    <option value="FECHADO">🟡 FECHADO (Aguardando sorteio)</option>
+                    <option value="APURADO">🔵 APURADO (Sorteio realizado)</option>
+                    <option value="CANCELADO">⚫ CANCELADO (Dinheiro devolvido)</option>
+                </select>
+            </div>
+
+            <div style="flex: 1;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #007bff;">Prêmio Total (R$):</label>
+                <input @bind="bolao.PremioTotal" type="number" step="0.01" disabled="@(bolao.Status != "APURADO")" class="form-control" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; background-color: @(bolao.Status != "APURADO" ? "#e9ecef" : "white"); font-weight: bold; color: #28a745;" />
+            </div>
+        </div>
+
+        <div style="margin-bottom: 25px;">
+            <label style="display: block; font-weight: bold; margin-bottom: 5px;">Herdar fundo do Bolão Anterior (Opcional):</label>
+            <select @bind="bolao.BolaoOrigemId" class="form-control" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc;">
+                <option value="">-- Nenhum (Bolão Independente) --</option>
+                @foreach (var b in listaBoloesAnteriores)
+                {
+                    if (b.Id.ToString() != IdParam)
+                    {
+                        var concursoVinculado = listaConcursos.FirstOrDefault(c => c.Id == b.ConcursoId);
+                        var nomeConcurso = concursoVinculado != null ? $"{concursoVinculado.Tipo} {concursoVinculado.Numero}" : $"Bolão {b.Id}";
+                        
+                        <option value="@b.Id">@nomeConcurso (Fundo: @b.PercentualFundo%)</option>
+                    }
+                }
+            </select>
+        </div>
+
+        @if (!string.IsNullOrEmpty(mensagem))
+        {
+            <div style="padding: 15px; margin-bottom: 20px; border-radius: 8px; background-color: @(mensagem.Contains("✅") ? "#d4edda" : "#f8d7da"); color: @(mensagem.Contains("✅") ? "#155724" : "#721c24"); border: 1px solid @(mensagem.Contains("✅") ? "#c3e6cb" : "#f5c6cb");">
+                @mensagem
+            </div>
+        }
+
+        <button @onclick="Salvar" disabled="@processando"
+                style="width: 100%; padding: 15px; font-size: 18px; font-weight: bold; background-color: @(processando ? "#ccc" : "#007bff"); color: white; border: none; border-radius: 8px; cursor: pointer;">
+            @(processando ? "⏳ SALVANDO..." : "💾 SALVAR BOLÃO")
+        </button>
+        
+        <button @onclick='() => Nav.NavigateTo("lista-boloes")'
+                style="width: 100%; margin-top: 15px; background: none; border: 1px solid #ccc; padding: 12px; border-radius: 8px; cursor: pointer; color: #666;">
+            ⬅ Voltar para Lista
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string IdParam { get; set; }
+
+    private Bolao bolao = new Bolao { Status = "ABERTO", ValorCota = 10.00m, PercentualFundo = 10.0m, PremioTotal = 0 };
+    
+    private List<Concurso> listaConcursos = new List<Concurso>();
+    private List<Bolao> listaBoloesAnteriores = new List<Bolao>();
+    
+    private bool carregando = true;
+    private bool processando = false;
+    private string mensagem;
+
+    private bool EhEdicao => !string.IsNullOrEmpty(IdParam);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarDependencias();
+
+        if (EhEdicao)
+        {
+            try
+            {
+                var response = await Supabase.From<Bolao>().Get();
+                var encontrado = response.Models.FirstOrDefault(b => b.Id.ToString() == IdParam);
+                if (encontrado != null)
+                {
+                    bolao = encontrado;
+                }
+                else
+                {
+                    mensagem = "❌ Bolão não encontrado.";
+                }
+            }
+            catch (Exception ex)
+            {
+                mensagem = "Erro ao carregar bolão: " + ex.Message;
+            }
+        }
+        
+        carregando = false;
+    }
+
+    private async Task CarregarDependencias()
+    {
+        try
+        {
+            var responseConcursos = await Supabase.From<Concurso>().Get();
+            var dataCorte = DateTime.Today.AddDays(-30);
+            
+            listaConcursos = responseConcursos.Models
+                .Where(c => c.DataSorteio == null || c.DataSorteio >= dataCorte)
+                .OrderByDescending(c => c.DataSorteio)
+                .ToList();
+
+            var responseBoloes = await Supabase.From<Bolao>().Get();
+            
+            listaBoloesAnteriores = responseBoloes.Models
+                .Where(b => b.CriadoEm == null || b.CriadoEm >= dataCorte)
+                .OrderByDescending(b => b.Id)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Erro ao carregar dependências: " + ex.Message);
+        }
+    }
+
+    private async Task AtualizarApenasConcursos()
+    {
+        try
+        {
+            var responseConcursos = await Supabase.From<Concurso>().Get();
+            var dataCorte = DateTime.Today.AddDays(-30);
+            
+            listaConcursos = responseConcursos.Models
+                .Where(c => c.DataSorteio == null || c.DataSorteio >= dataCorte)
+                .OrderByDescending(c => c.DataSorteio)
+                .ToList();
+                
+            mensagem = "✅ Lista de concursos atualizada com sucesso!";
+        }
+        catch (Exception ex)
+        {
+            mensagem = "❌ Erro ao atualizar concursos: " + ex.Message;
+        }
+    }
+
+    private async Task Salvar()
+    {
+        if (bolao.ConcursoId == 0)
+        {
+            mensagem = "⚠️ Você precisa vincular este bolão a um Concurso!";
+            return;
+        }
+
+        if (bolao.ValorCota <= 0)
+        {
+            mensagem = "⚠️ O valor da cota deve ser maior que zero!";
+            return;
+        }
+
+        // Se o status voltar para aberto ou fechado, zera o prêmio por segurança
+        if (bolao.Status != "APURADO")
+        {
+            bolao.PremioTotal = 0;
+        }
+
+        try
+        {
+            processando = true;
+            mensagem = "⏳ Salvando...";
+
+            if (EhEdicao)
+            {
+                await Supabase.From<Bolao>().Update(bolao);
+            }
+            else
+            {
+                bolao.CriadoEm = DateTime.Now;
+                await Supabase.From<Bolao>().Insert(bolao);
+            }
+
+            mensagem = $"✅ Bolão salvo com sucesso!";
+            
+            if (!EhEdicao)
+            {
+                bolao = new Bolao { Status = "ABERTO", ValorCota = 10.00m, PercentualFundo = 10.0m, PremioTotal = 0 };
+            }
+        }
+        catch (Exception ex)
+        {
+            mensagem = "❌ Erro ao salvar: " + ex.Message;
+        }
+        finally
+        {
+            processando = false;
+        }
+    }
+}

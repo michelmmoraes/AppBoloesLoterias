@@ -21,11 +21,21 @@ public class Participante : BaseModel
     public List<string> Telefones { get; set; }
 
     [Column("saldo")]
-    public decimal Saldo { get; set; } 
-
-    [Column("historico_saldo")]
-    public object HistoricoSaldo { get; set; } // Armazenado como JSONB no banco
+    public decimal Saldo { get; set; }
 
     [Column("criado_em")]
     public DateTime? CriadoEm { get; set; }
+
+    // Mapeamento correto do JSONB para a nossa Lista tipada em C#
+    [Column("historico_saldo")]
+    public List<RegistroSaldo> HistoricoSaldo { get; set; } = new List<RegistroSaldo>();
+}
+
+public class RegistroSaldo
+{
+    public DateTime Data { get; set; }
+    public decimal ValorAnterior { get; set; }
+    public decimal ValorNovo { get; set; }
+    public decimal Diferenca { get; set; }
+    public string Motivo { get; set; }
 }

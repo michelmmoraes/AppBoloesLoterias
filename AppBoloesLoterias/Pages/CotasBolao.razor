@@ -1,0 +1,311 @@
+﻿@page "/cotas-bolao/{BolaoIdParam}"
+@using AppBoloesLoterias
+@inject Supabase.Client Supabase
+@inject NavigationManager Nav
+
+<PageTitle>Gerenciar Cotas</PageTitle>
+
+<div style="padding: 20px; max-width: 800px; margin: auto; font-family: sans-serif;">
+    
+    @if (carregando)
+    {
+        <p><em>⏳ Carregando o caixa do bolão...</em></p>
+    }
+    else if (bolao == null)
+    {
+        <div class="alert alert-danger">❌ Bolão não encontrado.</div>
+        <button @onclick='() => Nav.NavigateTo("lista-boloes")' class="btn btn-secondary">Voltar</button>
+    }
+    else
+    {
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style="margin: 0; color: #333;">💰 Cotas do Bolão</h2>
+            <button @onclick='() => Nav.NavigateTo("lista-boloes")' style="padding: 8px 15px; background: #eee; border: 1px solid #ccc; border-radius: 5px; cursor: pointer;">
+                ⬅ Voltar
+            </button>
+        </div>
+
+        <div style="background-color: #007bff; color: white; padding: 15px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h4 style="margin: 0 0 10px 0;">@nomeConcurso</h4>
+            <div style="display: flex; gap: 20px; font-size: 15px;">
+                <span><strong>Valor da Cota:</strong> R$ @bolao.ValorCota.ToString("N2")</span>
+                <span><strong>Status:</strong> @bolao.Status</span>
+                <span><strong>Total Arrecadado:</strong> R$ @(cotasDesteBolao.Sum(c => (c.QuantidadeTotal - c.QtdePagaFundo) * bolao.ValorCota).ToString("N2"))</span>
+            </div>
+        </div>
+
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #ced4da; margin-bottom: 30px;">
+            <h5 style="margin-top: 0; color: #495057;">➕ Lançar / Adicionar Cotas</h5>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end;">
+                
+                <div style="flex: 2; min-width: 200px;">
+                    <label style="font-weight: bold; font-size: 14px;">Participante:</label>
+                    <select @bind="ParticipanteSelecionado" class="form-control" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc;">
+                        <option value="0">-- Selecione o Jogador --</option>
+                        @foreach (var p in participantes.OrderBy(p => p.Nome))
+                        {
+                            <option value="@p.Id">@p.Nome (Saldo Disp: R$ @p.Saldo.ToString("N2"))</option>
+                        }
+                    </select>
+                </div>
+
+                <div style="flex: 1; min-width: 90px;">
+                    <label style="font-weight: bold; font-size: 14px;">Cotas Novas:</label>
+                    <input @bind="novaCota.QuantidadeTotal" type="number" min="1" class="form-control" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc;" />
+                </div>
+
+                <div style="flex: 1; min-width: 90px;">
+                    <label style="font-weight: bold; font-size: 14px;">C/ Fundo:</label>
+                    <input @bind="novaCota.QtdePagaFundo" type="number" min="0" class="form-control" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc;" />
+                </div>
+
+                <div style="flex: 2; min-width: 200px;">
+                    <label style="font-weight: bold; font-size: 14px;">Pagamento:</label>
+                    <select @bind="formaPagamento" class="form-control" style="width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; font-weight: bold; color: @CorPagamento;">
+                        <option value="1">✅ PAGO (Pix/Dinheiro)</option>
+                        <option value="2">🪙 PAGO (Usar Saldo do App)</option>
+                        <option value="3">❌ FIADO (Pendente)</option>
+                    </select>
+                </div>
+
+                <button @onclick="LançarCota" disabled="@processando" style="padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; min-width: 120px;">
+                    @(processando ? "⏳..." : "💾 Salvar")
+                </button>
+            </div>
+            
+            @if (mensagemAvisoExistente != "")
+            {
+                <div style="margin-top: 10px; font-size: 13px; color: #856404; background-color: #fff3cd; padding: 8px; border-radius: 4px; border: 1px solid #ffeeba;">
+                    ℹ️ <strong>Aviso:</strong> @mensagemAvisoExistente
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(mensagem))
+            {
+                <div style="margin-top: 15px; padding: 10px; border-radius: 5px; background-color: @(mensagem.Contains("✅") ? "#d4edda" : "#f8d7da"); color: @(mensagem.Contains("✅") ? "#155724" : "#721c24");">
+                    @mensagem
+                </div>
+            }
+        </div>
+
+        <h4 style="color: #333; margin-bottom: 15px;">📋 Jogadores no Bolão (@cotasDesteBolao.Count)</h4>
+        
+        @if (!cotasDesteBolao.Any())
+        {
+            <div class="alert alert-info">Nenhuma cota foi vendida para este bolão ainda.</div>
+        }
+        else
+        {
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                @foreach (var c in cotasDesteBolao.OrderByDescending(c => c.CriadoEm))
+                {
+                    var dono = participantes.FirstOrDefault(p => p.Id == c.ParticipanteId);
+                    var nomeDono = dono != null ? dono.Nome : "Desconhecido";
+                    var valorTotalDevido = (c.QuantidadeTotal - c.QtdePagaFundo) * bolao.ValorCota;
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px; border-radius: 8px; border-left: 5px solid @(c.Pago ? "#28a745" : "#dc3545"); box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                        <div>
+                            <strong style="font-size: 16px;">👤 @nomeDono</strong>
+                            <div style="font-size: 13px; color: #666; margin-top: 5px;">
+                                Total: <strong>@c.QuantidadeTotal cota(s)</strong> | Paga c/ Fundo: @c.QtdePagaFundo
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="text-align: right;">
+                                <strong style="font-size: 16px; color: @(c.Pago ? "#28a745" : "#dc3545");">
+                                    R$ @valorTotalDevido.ToString("N2")
+                                </strong>
+                                <div style="font-size: 12px; font-weight: bold; color: @(c.Pago ? "#28a745" : "#dc3545");">
+                                    @(c.Pago ? "✅ PAGO" : "❌ FIADO")
+                                </div>
+                            </div>
+                            
+                            <button @onclick="() => ExcluirCota(c)" title="Remover jogador do bolão" style="background: none; border: none; font-size: 18px; cursor: pointer;">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string BolaoIdParam { get; set; }
+
+    private Bolao bolao;
+    private string nomeConcurso = "";
+    
+    private List<Participante> participantes = new List<Participante>();
+    private List<Cota> cotasDesteBolao = new List<Cota>();
+    
+    private Cota novaCota = new Cota { QuantidadeTotal = 1, QtdePagaFundo = 0 };
+    private int formaPagamento = 1;
+    private string CorPagamento => formaPagamento == 3 ? "#dc3545" : (formaPagamento == 2 ? "#17a2b8" : "#28a745");
+    
+    private bool carregando = true;
+    private bool processando = false;
+    private string mensagem;
+    private string mensagemAvisoExistente = "";
+
+    // Lógica para avisar se o usuário já tem cota ao selecionar no dropdown
+    private long ParticipanteSelecionado
+    {
+        get => novaCota.ParticipanteId;
+        set
+        {
+            novaCota.ParticipanteId = value;
+            var cotaExistente = cotasDesteBolao.FirstOrDefault(c => c.ParticipanteId == value);
+            if (cotaExistente != null)
+            {
+                mensagemAvisoExistente = $"Este jogador já possui {cotaExistente.QuantidadeTotal} cota(s). Salvar agora irá ADICIONAR novas cotas ao total dele.";
+            }
+            else
+            {
+                mensagemAvisoExistente = "";
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarTudo();
+    }
+
+    private async Task CarregarTudo()
+    {
+        try
+        {
+            long bolaoId = long.Parse(BolaoIdParam);
+
+            var respBolao = await Supabase.From<Bolao>().Get();
+            bolao = respBolao.Models.FirstOrDefault(b => b.Id == bolaoId);
+
+            if (bolao != null)
+            {
+                var respConcurso = await Supabase.From<Concurso>().Get();
+                var concurso = respConcurso.Models.FirstOrDefault(c => c.Id == bolao.ConcursoId);
+                nomeConcurso = concurso != null ? $"{concurso.Tipo} - Concurso {concurso.Numero}" : "Bolão";
+
+                var respPart = await Supabase.From<Participante>().Get();
+                participantes = respPart.Models;
+
+                var respCotas = await Supabase.From<Cota>().Get();
+                cotasDesteBolao = respCotas.Models.Where(c => c.BolaoId == bolaoId).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Erro ao carregar: " + ex.Message);
+        }
+        finally
+        {
+            carregando = false;
+        }
+    }
+
+    private async Task LançarCota()
+    {
+        if (novaCota.ParticipanteId == 0) return;
+
+        try
+        {
+            processando = true;
+            
+            // Verifica se já existe um registro para atualizar em vez de inserir
+            var cotaExistente = cotasDesteBolao.FirstOrDefault(c => c.ParticipanteId == novaCota.ParticipanteId);
+            
+            // O valor financeiro cobrado é SEMPRE baseado apenas na quantidade NOVA sendo lançada
+            decimal valorCobradoDaOperacao = (novaCota.QuantidadeTotal - novaCota.QtdePagaFundo) * bolao.ValorCota;
+            var participante = participantes.FirstOrDefault(p => p.Id == novaCota.ParticipanteId);
+
+            // PROCESSAMENTO FINANCEIRO
+            if (formaPagamento == 2 && valorCobradoDaOperacao > 0 && participante != null)
+            {
+                participante.HistoricoSaldo ??= new List<RegistroSaldo>();
+                participante.HistoricoSaldo.Add(new RegistroSaldo
+                {
+                    Data = DateTime.Now,
+                    ValorAnterior = participante.Saldo,
+                    ValorNovo = participante.Saldo - valorCobradoDaOperacao,
+                    Diferenca = -valorCobradoDaOperacao,
+                    Motivo = $"Adição de {novaCota.QuantidadeTotal} cota(s) c/ Saldo - {nomeConcurso}"
+                });
+
+                participante.Saldo -= valorCobradoDaOperacao;
+                await Supabase.From<Participante>().Update(participante);
+            }
+
+            // ATUALIZAÇÃO DO BANCO (Upsert lógico)
+            bool estaPago = (formaPagamento == 1 || formaPagamento == 2);
+
+            if (cotaExistente != null)
+            {
+                // ATUALIZA O REGISTRO EXISTENTE
+                cotaExistente.QuantidadeTotal += novaCota.QuantidadeTotal;
+                cotaExistente.QtdePagaFundo += novaCota.QtdePagaFundo;
+                
+                // Se a nova cota for paga, assume-se que regularizou o montante (lógica de MVP)
+                if (estaPago) cotaExistente.Pago = true;
+                
+                await Supabase.From<Cota>().Update(cotaExistente);
+                mensagem = $"✅ Atualizado: {participante?.Nome} agora tem {cotaExistente.QuantidadeTotal} cotas!";
+            }
+            else
+            {
+                // INSERE UM NOVO REGISTRO
+                novaCota.BolaoId = bolao.Id;
+                novaCota.CriadoEm = DateTime.Now;
+                novaCota.Pago = estaPago;
+
+                await Supabase.From<Cota>().Insert(novaCota);
+                mensagem = $"✅ Cota inserida com sucesso para {participante?.Nome}!";
+            }
+            
+            // RECARREGA TELA
+            var respCotas = await Supabase.From<Cota>().Get();
+            cotasDesteBolao = respCotas.Models.Where(c => c.BolaoId == bolao.Id).ToList();
+            
+            var respPart = await Supabase.From<Participante>().Get();
+            participantes = respPart.Models;
+            
+            novaCota = new Cota { QuantidadeTotal = 1, QtdePagaFundo = 0 };
+            formaPagamento = 1;
+            mensagemAvisoExistente = "";
+            ParticipanteSelecionado = 0;
+        }
+        catch (Exception ex)
+        {
+            mensagem = "❌ Erro ao salvar cota: " + ex.Message;
+        }
+        finally
+        {
+            processando = false;
+        }
+    }
+
+    private async Task ExcluirCota(Cota cotaParaExcluir)
+    {
+        try
+        {
+            processando = true;
+            await Supabase.From<Cota>().Delete(cotaParaExcluir);
+            
+            mensagem = "🗑️ Lançamento excluído! ATENÇÃO: Se o jogador havia pago usando o Saldo do aplicativo, você precisará editar o perfil dele e devolver o valor manualmente.";
+            
+            var respCotas = await Supabase.From<Cota>().Get();
+            cotasDesteBolao = respCotas.Models.Where(c => c.BolaoId == bolao.Id).ToList();
+        }
+        catch (Exception ex)
+        {
+            mensagem = "❌ Erro ao excluir: " + ex.Message;
+        }
+        finally
+        {
+            processando = false;
+        }
+    }
+}
